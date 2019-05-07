@@ -1,5 +1,5 @@
-
 module MpaModel
+using Statistics
 # using DifferentialEquations
 
 mutable struct FishingGround{T<:Real}
@@ -14,20 +14,59 @@ end
 FishingGround(K, r, A, α, μ, Nreserve, Nopen) = FishingGround(promote(K, r, A, α, μ, Nreserve, Nopen)...)
 
 abstract type AbstractFisher end
-struct Fisher{T<:Real} <: AbstractFisher
+struct BasicFisher{T<:Real} <: AbstractFisher
     D::T
     Th::T
 end
-Fisher(D, Th) = Fisher(promote(D, Th)...)
+BasicFisher(D, Th) = BasicFisher(promote(D, Th)...)
+
+update_opinion!(fisher::BasicFisher, c::Real) = 0
+
+mutable struct OpinionatedFisher{T<:Real} <: AbstractFisher
+    D::T
+    Th::T
+    α::T
+    Δα::T
+    last::T
+
+    function OpinionatedFisher{T}(D::T, Th::T, α::T, Δα::T, last::T) where T<:Real
+        0 <= α <= 1 || throw(ArgumentError("α=$α is not between 0 and 1"))
+        0 <= Δα <= 1 || throw(ArgumentError("Δα=$Δα is not between 0 and 1"))
+        return new(D, Th, α, Δα, last)
+    end
+end
+function OpinionatedFisher(D::T, Th::T, α::T, Δα::T, last::T) where T<:Real
+    return OpinionatedFisher{T}(D, Th, α, Δα, last)
+end
+OpinionatedFisher(D, Th, α, Δα, last=0) = OpinionatedFisher(promote(D, Th, α, Δα, last)...)
+
+α_opinion(fisher::OpinionatedFisher) = fisher.α
+
+function update_opinion!(fisher::OpinionatedFisher, c::Real)
+    if c > fisher.last
+        fisher.α = min(1, fisher.α + fisher.Δα)
+    else
+        fisher.α = max(0, fisher.α - fisher.Δα)
+    end
+    return fisher.α
+end
+
+function α_consensus(fishers::Vector{T}) where T <: AbstractFisher
+    return mean(α_opinion.(fishers))
+end
 
 spillover(R, M, μ, α) = μ * (R - (α / (1-α)) * M)
 logistic(n, r, K) = 1 + r * (1 - n/K)
 popgrowth(N, r, K, A) = N * logistic(N/A, r, K)
 catch_per_boat(n, D, Th) = D * n / (1 + D * Th * n)
 
+# Fish density in reserve/open area. Checks to avoid division by 0
+nreserve(g::FishingGround) = g.α > 0 ? g.Nreserve / (g.A * g.α) : 0
+nopen(g::FishingGround) = g.α < 1 ? g.Nopen / (g.A * (1-g.α)) : 0
+
 function grow_population!(g::FishingGround)
-    g.Nreserve = logistic(g.Nreserve/(g.A * g.α), g.r, g.K) * g.Nreserve
-    g.Nopen = logistic(g.Nopen/(g.A * (1-g.α)), g.r, g.K) * g.Nopen
+    g.Nreserve = logistic(nreserve(g), g.r, g.K) * g.Nreserve
+    g.Nopen = logistic(nopen(g), g.r, g.K) * g.Nopen
     return g
 end
 
@@ -38,28 +77,35 @@ function spillover!(g::FishingGround)
     return g
 end
 
-function catch_fish!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
+function catch_fish!(fisher::AbstractFisher, n)
+    c = catch_per_boat(n, fisher.D, fisher.Th)
+    update_opinion!(fisher, c)
+    return c
+end
+
+function harvest!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
     n = g.Nopen / (g.A * (1-g.α))
-    landings = [catch_per_boat(n, f.D, f.Th) for f in fishers]
+    landings = [catch_fish!(f, n) for f in fishers]
     total = sum(landings)
-    if total >= g.Nopen
-        g.Nopen = 0
-    else
-        g.Nopen -= total
-    end
+    total >= g.Nopen ? g.Nopen = 0 : g.Nopen -= total
     return total
+end
+
+function set_protected!(g::FishingGround, α::Real)
+    0 <= α <= 1 || DomainError(α, "α must be between 0 and 1")
+    Δarea = g.A * α - g.A * g.α
+    Δarea > 0 ? ΔN = g.Nopen/g.A * Δarea : ΔN = g.Nreserve/g.A * Δarea
+    g.Nreserve += ΔN
+    g.Nopen -= ΔN
+    g.α = α
+    return g
 end
 
 function update!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
     grow_population!(g)
     spillover!(g)
-    landings = catch_fish!(g, fishers)
+    landings = harvest!(g, fishers)
     return landings
-end
-
-function set_protected!(g::FishingGround, α::Real)
-    0 <= α <= 1 || DomainError(α, "α must be between 0 and 1")
-    g.α = α
 end
 
 end # module
