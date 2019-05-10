@@ -19,7 +19,7 @@ struct BasicFisher{T<:Real} <: AbstractFisher
     Th::T
 end
 BasicFisher(D, Th) = BasicFisher(promote(D, Th)...)
-
+α_opinion(fisher::BasicFisher) = 0
 update_opinion!(fisher::BasicFisher, c::Real) = 0
 
 mutable struct OpinionatedFisher{T<:Real} <: AbstractFisher
@@ -48,6 +48,7 @@ function update_opinion!(fisher::OpinionatedFisher, c::Real)
     else
         fisher.α = max(0, fisher.α - fisher.Δα)
     end
+    fisher.last = c
     return fisher.α
 end
 
@@ -92,9 +93,13 @@ function harvest!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFishe
 end
 
 function set_protected!(g::FishingGround, α::Real)
-    0 <= α <= 1 || DomainError(α, "α must be between 0 and 1")
+    0 < α < 1 || DomainError(α, "α must be between 0 and 1")
     Δarea = g.A * α - g.A * g.α
-    Δarea > 0 ? ΔN = g.Nopen/g.A * Δarea : ΔN = g.Nreserve/g.A * Δarea
+    if Δarea > 0
+        ΔN = nopen(g) * Δarea
+    else
+        ΔN = nreserve(g) * Δarea
+    end
     g.Nreserve += ΔN
     g.Nopen -= ΔN
     g.α = α
