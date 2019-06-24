@@ -57,8 +57,7 @@ function α_consensus(fishers::Vector{T}) where T <: AbstractFisher
 end
 
 spillover(R, M, μ, α) = μ * (R - (α / (1-α)) * M)
-logistic(n, r, K) = 1 + r * (1 - n/K)
-popgrowth(N, r, K, A) = N * logistic(N/A, r, K)
+logistic(n, r, K) = r * (1 - n/K)
 catch_per_boat(n, D, Th) = D * n / (1 + D * Th * n)
 
 # Fish density in reserve/open area. Checks to avoid division by 0
@@ -66,8 +65,10 @@ nreserve(g::FishingGround) = g.α > 0 ? g.Nreserve / (g.A * g.α) : 0
 nopen(g::FishingGround) = g.α < 1 ? g.Nopen / (g.A * (1-g.α)) : 0
 
 function grow_population!(g::FishingGround)
-    g.Nreserve = logistic(nreserve(g), g.r, g.K) * g.Nreserve
-    g.Nopen = logistic(nopen(g), g.r, g.K) * g.Nopen
+    nres = nreserve(g)
+    nop = nopen(g)
+    g.Nreserve += nres * logistic(nres, g.r, g.K) * g.A * g.α
+    g.Nopen += nop  * logistic(nop, g.r, g.K) * g.A * (1-g.α)
     return g
 end
 
@@ -75,7 +76,7 @@ function spillover!(g::FishingGround)
     s = spillover(g.Nreserve, g.Nopen, g.μ, g.α)
     g.Nreserve -= s
     g.Nopen += s
-    return g
+    return s
 end
 
 function catch_fish!(fisher::AbstractFisher, n)
