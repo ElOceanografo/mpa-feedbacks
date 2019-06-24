@@ -73,3 +73,11 @@ for fishers in [bfishers, ofishers]
     @assert all(NNres .>= 0)
     @assert all(NNopen .>= 0)
 end
+
+lastcatch = 0.05
+α0 = 0.1
+fisher = m.OpinionatedFisher(0.5, 1, α0, 0.1, lastcatch)
+α1 = m.update_opinion!(fisher, fisher.last * 1.1)
+α2 = m.update_opinion!(fisher, fisher.last * 0.9)
+@assert α1 > α0
+@assert α2 < α1

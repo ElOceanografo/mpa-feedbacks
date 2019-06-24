@@ -31,7 +31,7 @@ mutable struct OpinionatedFisher{T<:Real} <: AbstractFisher
 
     function OpinionatedFisher{T}(D::T, Th::T, α::T, Δα::T, last::T) where T<:Real
         0 <= α <= 1 || throw(ArgumentError("α=$α is not between 0 and 1"))
-        0 <= Δα <= 1 || throw(ArgumentError("Δα=$Δα is not between 0 and 1"))
+        # 0 <= Δα <= 1 || throw(ArgumentError("Δα=$Δα is not between 0 and 1"))
         return new(D, Th, α, Δα, last)
     end
 end
@@ -43,11 +43,14 @@ OpinionatedFisher(D, Th, α, Δα, last=0) = OpinionatedFisher(promote(D, Th, α
 α_opinion(fisher::OpinionatedFisher) = fisher.α
 
 function update_opinion!(fisher::OpinionatedFisher, c::Real)
-    if c > fisher.last
-        fisher.α = min(1, fisher.α + fisher.Δα)
-    else
-        fisher.α = max(0, fisher.α - fisher.Δα)
-    end
+    fisher.last <= 0 ? change = 0 : change = (c - fisher.last) / fisher.last
+    fisher.α *= 1+fisher.Δα*change
+    fisher.α = max(0, min(fisher.α, 1))
+    # if c > fisher.last
+    #     fisher.α = min(1, fisher.α + fisher.Δα)
+    # else
+    #     fisher.α = max(0, fisher.α - fisher.Δα)
+    # end
     fisher.last = c
     return fisher.α
 end
