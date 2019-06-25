@@ -67,9 +67,14 @@ plot(n -> Nfishers * m.catch_per_boat(n, a, Th), 0, K,
     xlabel="Fish biomass density (T km^-2)", ylabel="Total catch (T)")
 plot!(n -> A*n*m.logistic(n, r, K), 0, K)
 
-plot(N -> Nfishers * m.catch_per_boat(N/A, a, Th), 0, A * K,
-    xlabel="Total fish biomass (T)", ylabel="Total catch (T)", )
-plot!(N -> N * m.logistic(N/A, r, K), 0, A*K)
+let N = range(0, A*K, length=100)
+    fishcatch = Nfishers .* m.catch_per_boat.(N/A, a, Th)
+    fishgrowth = N .* m.logistic.(N/A, r, K)
+    fishspill = m.spillover.(α100*A*K, N, μ, α100)
+    growthspill = N .* m.logistic.(N/(A*(1-α100)), r, K) .+ fishspill
+    plot(N, [fishcatch, fishgrowth, fishspill, growthspill],
+        label=["Catch", "Pop. Growth", "Spillover", "Growth+Spill"])
+end
 
 params1 = (K=K, r=r, A=A, α0=α0, α100=α100, μ=μ,
     a=a, Th=Th, αpref=αpref, Δα=Δα, Nfishers=Nfishers)
@@ -78,7 +83,7 @@ res1 = run_simulation(params1, nsim) #NNopen, NNres, landings, αα_avg
 p1 = plot_results(res1..., 1);
 
 params2 = (K=K, r=r, A=A, α0=α0, α100=α100, μ=μ,
-    a=a, Th=Th, αpref=0., Δα=Δα, Nfishers=Nfishers)
+    a=a, Th=Th, αpref=0.4, Δα=100, Nfishers=Nfishers)
 res2 = run_simulation(params2, nsim)
 p2 = plot_results(res2..., 1);
 plot(p1, p2)
