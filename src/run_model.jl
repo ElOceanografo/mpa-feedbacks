@@ -1,4 +1,7 @@
 using Plots
+using Optim
+using Polynomials
+
 include("mpa_model.jl")
 m = MpaModel
 
@@ -53,7 +56,7 @@ r = 1.5        # Intrinsic growth rate of fish populations
 A = 100        # Area of fishing ground, km^2
 α0 = 0.0       # Proportion of fishing ground in MPA at start
 α100 = 0.3    # Proportion of fishing ground in MPA after 100 timesteps
-μ = 0.5        # reserve spillover parameter
+μ = 0.1        # reserve spillover parameter
 
 # Fisher parameters
 a = 10        # Search rate, km^2 d^-1
@@ -67,14 +70,41 @@ plot(n -> Nfishers * m.catch_per_boat(n, a, Th), 0, K,
     xlabel="Fish biomass density (T km^-2)", ylabel="Total catch (T)")
 plot!(n -> A*n*m.logistic(n, r, K), 0, K)
 
-let N = range(0, A*K, length=100)
-    fishcatch = Nfishers .* m.catch_per_boat.(N/A, a, Th)
-    fishgrowth = N .* m.logistic.(N/A, r, K)
-    fishspill = m.spillover.(α100*A*K, N, μ, α100)
-    growthspill = N .* m.logistic.(N/(A*(1-α100)), r, K) .+ fishspill
-    plot(N, [fishcatch, fishgrowth, fishspill, growthspill],
-        label=["Catch", "Pop. Growth", "Spillover", "Growth+Spill"])
+N = range(0, A*K, length=100)
+Ao = A*(1-α100)
+Ar = A*α100
+fishcatch = Nfishers .* m.catch_per_boat.(N/Ao, a, Th)
+fishgrowth = N .* m.logistic.(N/Ao, r, K)
+fishspill = m.spillover.(Ar*K, N, μ, α100)
+growthspill = N .* m.logistic.(N/Ao, r, K) .+ fishspill
+plot(N, [fishcatch, fishgrowth, fishspill, growthspill],
+    label=["Catch" "Pop. Growth" "Net spillover" "Growth+Spill"],
+    xlabel="Fish biomass in open area (T)", ylabel="Rate (T/timestep)",
+    ylims=[-10, NaN])
+
+plot(N, [fishcatch, growthspill],
+    label=["Catch" "Growth+Spillover"],
+    xlabel="Fish biomass in open area (T)", ylabel="Rate (T/timestep)",
+    ylims=[-10, NaN])
+
+function biomass_equilibria(A, α, r, K, μ, a, Th, Nfishers)
+    Ao = A*(1-α) # open area
+    Ar = A*α     # reserve area
+    Nr = Ar*K    # reserve fish biomass
+    # coefficients for cubic equation
+    c0 = μ*Ao*Nr
+    c1 = r*Ao - μ*Ar + μ*a*Th*Nr - a*Nfishers
+    c2 = -r/K + r*a*Th - μ*a*Th*Ar/Ao
+    c3 = -r*a*Th/(Ao*K)
+    rts = roots(Poly([c0, c1, c2, c3]))
+    # only return the real roots
+    return real.(rts[isreal.(rts)])
 end
+
+eqs0 = biomass_equilibria(A, α0, r, K, μ, a, Th, Nfishers)
+eqs100 = biomass_equilibria(A, α100, r, K, μ, a, Th, Nfishers)
+# scatter!(eqs0, Nfishers * m.catch_per_boat.(eqs0/(A*(1-α0)), a, Th))
+scatter!(eqs100, Nfishers * m.catch_per_boat.(eqs100/(A*(1-α100)), a, Th))
 
 params1 = (K=K, r=r, A=A, α0=α0, α100=α100, μ=μ,
     a=a, Th=Th, αpref=αpref, Δα=Δα, Nfishers=Nfishers)
