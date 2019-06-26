@@ -15,30 +15,30 @@ FishingGround(K, r, A, α, μ, Nreserve, Nopen) = FishingGround(promote(K, r, A,
 
 abstract type AbstractFisher end
 struct BasicFisher{T<:Real} <: AbstractFisher
-    D::T
+    a::T
     Th::T
 end
-BasicFisher(D, Th) = BasicFisher(promote(D, Th)...)
+BasicFisher(a, Th) = BasicFisher(promote(a, Th)...)
 α_opinion(fisher::BasicFisher) = 0
 update_opinion!(fisher::BasicFisher, c::Real) = 0
 
 mutable struct OpinionatedFisher{T<:Real} <: AbstractFisher
-    D::T
+    a::T
     Th::T
     α::T
     Δα::T
     last::T
 
-    function OpinionatedFisher{T}(D::T, Th::T, α::T, Δα::T, last::T) where T<:Real
+    function OpinionatedFisher{T}(a::T, Th::T, α::T, Δα::T, last::T) where T<:Real
         0 <= α <= 1 || throw(ArgumentError("α=$α is not between 0 and 1"))
         # 0 <= Δα <= 1 || throw(ArgumentError("Δα=$Δα is not between 0 and 1"))
-        return new(D, Th, α, Δα, last)
+        return new(a, Th, α, Δα, last)
     end
 end
-function OpinionatedFisher(D::T, Th::T, α::T, Δα::T, last::T) where T<:Real
-    return OpinionatedFisher{T}(D, Th, α, Δα, last)
+function OpinionatedFisher(a::T, Th::T, α::T, Δα::T, last::T) where T<:Real
+    return OpinionatedFisher{T}(a, Th, α, Δα, last)
 end
-OpinionatedFisher(D, Th, α, Δα, last=0) = OpinionatedFisher(promote(D, Th, α, Δα, last)...)
+OpinionatedFisher(a, Th, α, Δα, last=0) = OpinionatedFisher(promote(a, Th, α, Δα, last)...)
 
 α_opinion(fisher::OpinionatedFisher) = fisher.α
 
@@ -61,7 +61,7 @@ end
 
 spillover(R, M, μ, α) = μ * (R - (α / (1-α)) * M)
 logistic(n, r, K) = r * (1 - n/K)
-catch_per_boat(n, D, Th) = D * n / (1 + D * Th * n)
+catch_per_boat(n, a, Th) = a * n / (1 + a * Th * n)
 
 # Fish density in reserve/open area. Checks to avoid division by 0
 nreserve(g::FishingGround) = g.α > 0 ? g.Nreserve / (g.A * g.α) : 0
@@ -83,7 +83,7 @@ function spillover!(g::FishingGround)
 end
 
 function catch_fish!(fisher::AbstractFisher, n)
-    c = catch_per_boat(n, fisher.D, fisher.Th)
+    c = catch_per_boat(n, fisher.a, fisher.Th)
     update_opinion!(fisher, c)
     return c
 end
