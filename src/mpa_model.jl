@@ -59,7 +59,7 @@ function α_consensus(fishers::Vector{T}) where T <: AbstractFisher
     return mean(α_opinion.(fishers))
 end
 
-spillover(R, M, μ, α) = μ * (R - (α / (1-α)) * M)
+spillover(Nr, No, μ, α) = μ * (Nr - (α / (1-α)) * No)
 logistic(n, r, K) = r * (1 - n/K)
 catch_per_boat(n, a, Th) = a * n / (1 + a * Th * n)
 
