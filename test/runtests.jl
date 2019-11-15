@@ -19,8 +19,9 @@ Th = 0.001 # boat d (ton fish)^-1
 bfishers = [m.BasicFisher(a, Th) for i in 1:Nfishers]
 cfishers = [m.CatchObservingFisher(a, Th, 0.05, rand()*0.5) for i in 1:Nfishers]
 mfishers = [m.CatchObservingFisher(a, Th, 0.05, rand()*0.5) for i in 1:Nfishers]
+mixedfishers = [bfishers; cfishers; mfishers]
 
-for fishers in [bfishers, cfishers, mfishers]
+for fishers in [bfishers, cfishers, mfishers, mixedfishers]
     ground = m.FishingGround(K, r, A, α, μ, Nreserve, Nopen)
     m.grow_population!(ground)
     m.spillover!(ground)
