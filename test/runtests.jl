@@ -17,9 +17,10 @@ Th = 0.001 # boat d (ton fish)^-1
 
 
 bfishers = [m.BasicFisher(a, Th) for i in 1:Nfishers]
-ofishers = [m.OpinionatedFisher(a, Th, 0.05, rand()*0.5) for i in 1:Nfishers]
+cfishers = [m.CatchObservingFisher(a, Th, 0.05, rand()*0.5) for i in 1:Nfishers]
+mfishers = [m.CatchObservingFisher(a, Th, 0.05, rand()*0.5) for i in 1:Nfishers]
 
-for fishers in [bfishers, ofishers]
+for fishers in [bfishers, cfishers, mfishers]
     ground = m.FishingGround(K, r, A, α, μ, Nreserve, Nopen)
     m.grow_population!(ground)
     m.spillover!(ground)
@@ -73,11 +74,3 @@ for fishers in [bfishers, ofishers]
     @assert all(NNres .>= 0)
     @assert all(NNopen .>= 0)
 end
-
-lastcatch = 0.05
-α0 = 0.1
-fisher = m.OpinionatedFisher(0.5, 1, α0, 0.1, lastcatch)
-α1 = m.update_opinion!(fisher, fisher.last * 1.1)
-α2 = m.update_opinion!(fisher, fisher.last * 0.9)
-@assert α1 > α0
-@assert α2 < α1
