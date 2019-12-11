@@ -50,7 +50,7 @@ function set_protected!(g::FishingGround, α::Real)
     g.Nreserve += ΔN
     g.Nopen -= ΔN
     g.α = α
-    return g
+    return α
 end
 
 ###############################################################################
@@ -130,7 +130,7 @@ end
 function MpaObservingFisher(a::T, Th::T, α::T, Δα::T, lastmpa::T, thismpa::T) where T<:Real
     return MpaObservingFisher{T}(a, Th, α, Δα, lastmpa, thismpa)
 end
-MpaObservingFisher(a, Th, α, Δα, lastmpa=0, thismpa=0) = MpaObservingFisher(promote(a, Th, α, Δα, lastmpa, thicatch)...)
+MpaObservingFisher(a, Th, α, Δα, lastmpa=zero(a), thismpa=zero(a)) = MpaObservingFisher(promote(a, Th, α, Δα, lastmpa, thismpa)...)
 
 α_opinion(fisher::MpaObservingFisher) = fisher.α
 
