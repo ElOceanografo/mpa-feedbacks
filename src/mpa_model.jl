@@ -106,8 +106,8 @@ end
 
 function update_opinion!(fisher::CatchObservingFisher)
     fisher.lastcatch <= 0 ? change = 0 : change = (fisher.thiscatch - fisher.lastcatch) / fisher.lastcatch
-    fisher.α *= 1+fisher.Δα*change
-    fisher.α = max(0, min(fisher.α, 1))
+    fisher.α = 1 / (1 + exp(-fisher.Δα * change))#*= 1+fisher.Δα*change
+    # fisher.α = max(0, min(fisher.α, 1))
 end
 
 ##########################
@@ -143,8 +143,9 @@ end
 
 function update_opinion!(fisher::MpaObservingFisher)
     fisher.lastmpa <= 0 ? change = 0 : change = (fisher.thismpa - fisher.lastmpa) / fisher.lastmpa
-    fisher.α *= 1+fisher.Δα*change
-    fisher.α = max(0, min(fisher.α, 1))
+    # fisher.α *= 1+fisher.Δα*change
+    # fisher.α = max(0, min(fisher.α, 1))
+    fisher.α = 1 / (1 + exp(-fisher.Δα * change))#*= 1+fisher.Δα*change
 end
 
 ###############################################################################
