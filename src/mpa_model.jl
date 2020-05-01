@@ -58,6 +58,10 @@ end
 ###############################################################################
 abstract type AbstractFisher end
 
+update_observation!(fisher::T, g::FishingGround) where T<:AbstractFisher = 0
+update_catch!(fisher::T, c) where T<:AbstractFisher = 0
+update_opinion!(fisher::T) where T<: AbstractFisher = 0
+α_opinion(fisher::T) where T<: AbstractFisher = 0
 ##############
 # Basic fisher
 ##############
@@ -66,12 +70,6 @@ struct BasicFisher{T<:Real} <: AbstractFisher
     Th::T
 end
 BasicFisher(a, Th) = BasicFisher(promote(a, Th)...)
-α_opinion(fisher::BasicFisher) = 0
-update_opinion!(fisher::BasicFisher) = 0
-
-function harvest!(g::FishingGround, fisher::BasicFisher)
-    return catch_per_boat(nopen(g), fisher.a, fisher.Th)
-end
 
 #########################
 # Catch-observing fisher
@@ -97,11 +95,10 @@ CatchObservingFisher(a, Th, α, Δα, lastcatch=0, thiscatch=0) = CatchObserving
 
 α_opinion(fisher::CatchObservingFisher) = fisher.α
 
-function harvest!(g::FishingGround, fisher::CatchObservingFisher)
-    c = catch_per_boat(nopen(g), fisher.a, fisher.Th)
+
+function update_catch!(fisher::CatchObservingFisher, c)
     fisher.lastcatch = fisher.thiscatch
     fisher.thiscatch = c
-    return c
 end
 
 function update_opinion!(fisher::CatchObservingFisher)
@@ -134,11 +131,9 @@ MpaObservingFisher(a, Th, α, Δα, lastmpa=zero(a), thismpa=zero(a)) = MpaObser
 
 α_opinion(fisher::MpaObservingFisher) = fisher.α
 
-function harvest!(g::FishingGround, fisher::MpaObservingFisher)
-    c = catch_per_boat(nopen(g), fisher.a, fisher.Th)
+function update_observation!(fisher::MpaObservingFisher, g::FishingGround)
     fisher.lastmpa = fisher.thismpa
     fisher.thismpa = nreserve(g)
-    return c
 end
 
 function update_opinion!(fisher::MpaObservingFisher)
@@ -153,12 +148,23 @@ end
 
 function harvest!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
     n = nopen(g)
-    landings = 0
-    for f in fishers
-        landings += harvest!(g, f)
+    catches = [catch_per_boat(n, f.a, f.Th) for f in fishers]
+    landings = sum(catches)
+    if landings > n
+        catches .-= (landings - n) / length(catches)
+        landings = n
     end
-    landings >= g.Nopen ? g.Nopen = 0 : g.Nopen -= landings
+    g.Nopen -= landings
+    for (f, c) in zip(fishers, catches)
+        update_catch!(f, c)
+    end
     return landings
+end
+
+function observe!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
+    for f in fishers
+        update_observation!(f, g)
+    end
 end
 
 function α_consensus(fishers::Vector{T}) where T <: AbstractFisher
@@ -169,6 +175,7 @@ function update!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
     grow_population!(g)
     spillover!(g)
     landings = harvest!(g, fishers)
+    observe!(g, fishers)
     update_opinion!.(fishers)
     set_protected!(g, α_consensus(fishers))
     return landings
