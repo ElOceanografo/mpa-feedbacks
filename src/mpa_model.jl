@@ -4,7 +4,6 @@ using Statistics
 ###############################################################################
 # Fishing ground
 ###############################################################################
-
 mutable struct FishingGround{T<:Real}
     K::T
     r::T
@@ -13,8 +12,13 @@ mutable struct FishingGround{T<:Real}
     μ::T
     Nreserve::T
     Nopen::T
+    subsidy::T
+    subsidy_α::T
 end
-FishingGround(K, r, A, α, μ, Nreserve, Nopen) = FishingGround(promote(K, r, A, α, μ, Nreserve, Nopen)...)
+
+function FishingGround(K, r, A, α, μ, Nreserve, Nopen, subsidy=0, subsidy_α=0)
+    return FishingGround(promote(K, r, A, α, μ, Nreserve, Nopen, subsidy, subsidy_α)...)
+end
 
 spillover(Nr, No, μ, α) = μ * (Nr - (α / (1-α)) * No)
 logistic(n, r, K) = r * (1 - n/K)
@@ -23,17 +27,20 @@ catch_per_boat(n, a, Th) = a * n / (1 + a * Th * n)
 # Fish density in reserve/open area. Checks to avoid division by 0
 nreserve(g::FishingGround) = g.α > 0 ? g.Nreserve / (g.A * g.α) : 0
 nopen(g::FishingGround) = g.α < 1 ? g.Nopen / (g.A * (1-g.α)) : 0
+growthopen(g::FishingGround) = nopen(g) * logistic(nopen(g), g.r, g.K) * g.A * (1-g.α)
+growthreserve(g::FishingGround) = nreserve(g) * logistic(nreserve(g), g.r, g.K) * g.A * g.α
 
 function grow_population!(g::FishingGround)
-    nres = nreserve(g)
-    nop = nopen(g)
-    g.Nreserve += nres * logistic(nres, g.r, g.K) * g.A * g.α
-    g.Nopen += nop  * logistic(nop, g.r, g.K) * g.A * (1-g.α)
-    return g
+    Δres = growthreserve(g)
+    Δop = growthopen(g)
+    g.Nreserve = g.Nreserve + Δres
+    g.Nopen = g.Nopen + Δop
+    return (Δres, Δop)
 end
 
+spillover(g::FishingGround) = spillover(g.Nreserve, g.Nopen, g.μ, g.α)
 function spillover!(g::FishingGround)
-    s = spillover(g.Nreserve, g.Nopen, g.μ, g.α)
+    s = spillover(g)
     g.Nreserve -= s
     g.Nopen += s
     return s
@@ -53,15 +60,25 @@ function set_protected!(g::FishingGround, α::Real)
     return α
 end
 
+function subsidy(g::FishingGround{T}) where T
+    if g.α > g.subsidy_α
+        return g.subsidy
+    else
+        return zero(T)
+    end
+end
+
+
 ###############################################################################
 # Fisher types
 ###############################################################################
 abstract type AbstractFisher end
 
-update_observation!(fisher::T, g::FishingGround) where T<:AbstractFisher = 0
-update_catch!(fisher::T, c) where T<:AbstractFisher = 0
-update_opinion!(fisher::T) where T<: AbstractFisher = 0
-α_opinion(fisher::T) where T<: AbstractFisher = 0
+update_observation!(fisher::T, g::FishingGround) where T<:AbstractFisher = zero(T)
+update_catch!(fisher::T, c) where T<:AbstractFisher = zero(T)
+update_opinion!(fisher::T) where T<: AbstractFisher = zero(T)
+α_opinion(fisher::T) where T<: AbstractFisher = zero(T)
+
 ##############
 # Basic fisher
 ##############
@@ -94,7 +111,6 @@ end
 CatchObservingFisher(a, Th, α, Δα, lastcatch=0, thiscatch=0) = CatchObservingFisher(promote(a, Th, α, Δα, lastcatch, thiscatch)...)
 
 α_opinion(fisher::CatchObservingFisher) = fisher.α
-
 
 function update_catch!(fisher::CatchObservingFisher, c)
     fisher.lastcatch = fisher.thiscatch
@@ -147,16 +163,15 @@ end
 ###############################################################################
 
 function harvest!(g::FishingGround, fishers::Vector{T}) where T <: AbstractFisher
-    n = nopen(g)
-    catches = [catch_per_boat(n, f.a, f.Th) for f in fishers]
+    catches = [catch_per_boat(nopen(g), f.a, f.Th) for f in fishers]
     landings = sum(catches)
-    if landings > n
-        catches .-= (landings - n) / length(catches)
-        landings = n
+    if landings > g.Nopen
+        catches .-= (landings - g.Nopen) / length(catches)
+        landings = g.Nopen
     end
     g.Nopen -= landings
     for (f, c) in zip(fishers, catches)
-        update_catch!(f, c)
+        update_catch!(f, c + subsidy(g))
     end
     return landings
 end
